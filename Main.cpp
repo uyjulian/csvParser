@@ -45,7 +45,7 @@ static iTJSDispatch2 *ArrayClearMethod   = NULL;   // Array.clear
 
 class IFile {
 public:
-	virtual ‾IFile() {};
+	virtual ~IFile() {};
 	virtual bool addNextLine(ttstr &str) = 0;
 };
 
@@ -69,7 +69,7 @@ public:
 		eofFlag = false;
 	}
 
-	‾IFileStorage() {
+	~IFileStorage() {
 		if (in) {
 			in->Release();
 			in = NULL;
@@ -114,10 +114,10 @@ public:
 	 * 改行チェック
 	 */
 	bool endOfLine(int c) {
-		bool eol = (c =='¥r' || c == '¥n');
-		if (c == '¥r'){
+		bool eol = (c =='\r' || c == '\n');
+		if (c == '\r'){
 			c = getc();
-			if (!eof() && c != '¥n') {
+			if (!eof() && c != '\n') {
 				ungetc();
 			}
 		}
@@ -137,7 +137,7 @@ public:
 									mbline.data(),
 									(int)mbline.length(),
 									buf, l);
-			buf[l] = '¥0';
+			buf[l] = '\0';
 			str += buf;
 			delete buf;
 			return true;
@@ -184,10 +184,10 @@ public:
 	 * 改行チェック
 	 */
 	bool endOfLine(tjs_char c) {
-		bool eol = (c =='¥r' || c == '¥n');
-		if (c == '¥r'){
+		bool eol = (c =='\r' || c == '\n');
+		if (c == '\r'){
 			c = getc();
-			if (!eof() && c != '¥n') {
+			if (!eof() && c != '\n') {
 				ungetc();
 			}
 		}
@@ -234,7 +234,7 @@ public:
 		}
 	}
 	
-	‾IFileText() {
+	~IFileText() {
 		close();
 	}
 
@@ -268,10 +268,10 @@ public:
 	 * 改行チェック
 	 */
 	bool endOfLine(int c) {
-		bool eol = (c =='¥r' || c == '¥n');
-		if (c == '¥r'){
+		bool eol = (c =='\r' || c == '\n');
+		if (c == '\r'){
 			c = getc();
-			if (!eof() && c != '¥n') {
+			if (!eof() && c != '\n') {
 				ungetc();
 			}
 		}
@@ -444,10 +444,10 @@ public:
 		file = NULL;
 		lineNo = 0;
 		separator = ',';
-		newline = L"¥r¥n";
+		newline = L"\r\n";
 	}
 
-	‾NI_CSVParser() {
+	~NI_CSVParser() {
 		clear();
 	}
 
