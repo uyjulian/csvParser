@@ -1,7 +1,14 @@
+#if 0
 #include <windows.h>
+#endif
+#include "ncbind/ncbind.hpp"
 #include "tp_stub.h"
+#include "istream_compat.h"
 #include <stdio.h>
 #include <string>
+
+#define CP_UTF8 0
+#define CP_ACP 0
 
 // initStorage/parseStorageの読み込みデフォルトを吉里吉里組み込みのTextStreamにする場合は1
 // 
@@ -31,7 +38,7 @@ static void log(const tjs_char *format, ...)
 	va_list args;
 	va_start(args, format);
 	tjs_char msg[1024];
-	_vsnwprintf(msg, 1024, format, args);
+	TJS_vsnprintf(msg, 1024, format, args);
 	TVPAddLog(msg);
 	va_end(args);
 }
@@ -132,6 +139,7 @@ public:
 		}
 		int l = (int)mbline.length();
 		if (l > 0 || c != EOF) {
+#if 0
 			wchar_t *buf = new wchar_t[l + 1];
 			l = MultiByteToWideChar(codepage, 0,
 									mbline.data(),
@@ -140,6 +148,10 @@ public:
 			buf[l] = '\0';
 			str += buf;
 			delete buf;
+#endif
+			tjs_string utf16line;
+			TVPUtf8ToUtf16( utf16line, mbline );
+			str += utf16line;
 			return true;
 		} else {
 			return false;
@@ -348,6 +360,13 @@ delMember(iTJSDispatch2 *dispatch, const tjs_char *name)
 
 //---------------------------------------------------------------------------
 
+#ifdef TJS_NATIVE_CLASSID_NAME
+#undef TJS_NATIVE_CLASSID_NAME
+#undef TJS_NCM_REG_THIS
+#undef TJS_NATIVE_SET_ClassID
+#endif
+#define TJS_NCM_REG_THIS classobj
+#define TJS_NATIVE_SET_ClassID TJS_NATIVE_CLASSID_NAME = TJS_NCM_CLASSID;
 #define TJS_NATIVE_CLASSID_NAME ClassID_CSVParser
 static tjs_int32 TJS_NATIVE_CLASSID_NAME = -1;
 
@@ -399,7 +418,7 @@ protected:
 		do {
 			if (i < line.length() && line[i] == '"') {
 				++i;
-				fld = L"";
+				fld = TJS_W("");
 				j = i;
 				do {
 					for (;j < line.length(); j++){
@@ -444,7 +463,7 @@ public:
 		file = NULL;
 		lineNo = 0;
 		separator = ',';
-		newline = L"\r\n";
+		newline = TJS_W("\r\n");
 	}
 
 	~NI_CSVParser() {
@@ -519,7 +538,7 @@ public:
 	bool getNextLine(tTJSVariant *result = NULL) {
 		bool ret = false;
 		if (file) {
-			line = L"";
+			line = TJS_W("");
 			if (addline()) {
 				lineNo++;
 				iTJSDispatch2 *fields = TJSCreateArrayObject();
@@ -549,8 +568,8 @@ public:
 	 */
 	void parse(iTJSDispatch2 *objthis) {
 		iTJSDispatch2 *target = this->target ? this->target : objthis;
-		if (file && isValidMember(target, L"doLine")) {
-			iTJSDispatch2 *method = getMember(target, L"doLine");
+		if (file && isValidMember(target, TJS_W("doLine"))) {
+			iTJSDispatch2 *method = getMember(target, TJS_W("doLine"));
 			tTJSVariant result;
 			while (getNextLine(&result)) {
 				tTJSVariant var2 = tTJSVariant(lineNo);
@@ -673,6 +692,30 @@ static iTJSDispatch2 * Create_NC_CSVParser()
 
 #undef TJS_NATIVE_CLASSID_NAME
 
+static void PreRegistCallback()
+{
+	// TJS のグローバルオブジェクトを取得する
+	iTJSDispatch2 * global = TVPGetScriptDispatch();
+
+	if (global) {
+
+		// Arary クラスメンバー取得
+		{
+			tTJSVariant varScripts;
+			TVPExecuteExpression(TJS_W("Array"), &varScripts);
+			iTJSDispatch2 *dispatch = varScripts.AsObjectNoAddRef();
+			// メンバ取得
+			ArrayClearMethod = getMember(dispatch, TJS_W("clear"));
+		}
+
+		addMember(global, TJS_W("CSVParser"), Create_NC_CSVParser());
+		global->Release();
+	}
+}
+
+NCB_PRE_REGIST_CALLBACK(PreRegistCallback);
+
+#define CSVPARSER_NO_V2LINK
 #ifndef CSVPARSER_NO_V2LINK
 //---------------------------------------------------------------------------
 
@@ -703,7 +746,7 @@ extern "C" __declspec(dllexport) HRESULT __stdcall V2Link(iTVPFunctionExporter *
 			ArrayClearMethod = getMember(dispatch, TJS_W("clear"));
 		}
 
-		addMember(global, L"CSVParser", Create_NC_CSVParser());
+		addMember(global, TJS_W("CSVParser"), Create_NC_CSVParser());
 		global->Release();
 	}
 			
@@ -734,7 +777,7 @@ extern "C" __declspec(dllexport) HRESULT __stdcall V2Unlink()
 
 	// - global の DeleteMember メソッドを用い、オブジェクトを削除する
 	if (global)	{
-		delMember(global, L"CSVParser");
+		delMember(global, TJS_W("CSVParser"));
 		if (ArrayClearMethod) {
 			ArrayClearMethod->Release();
 			ArrayClearMethod = NULL;
