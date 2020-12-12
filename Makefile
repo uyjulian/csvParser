@@ -1,39 +1,10 @@
 
-CC = i686-w64-mingw32-gcc
-CXX = i686-w64-mingw32-g++
-GIT_TAG := $(shell git rev-parse --short HEAD)
-CFLAGS += -Ofast -march=ivybridge -mfpmath=sse -flto
-CFLAGS += -Wall -Wno-unused-value -Wno-format -I. -I.. -I../ncbind -DGIT_TAG=L\"$(GIT_TAG)\" -DNDEBUG -DWIN32 -D_WIN32 -D_WINDOWS 
-CFLAGS += -D_USRDLL -DMINGW_HAS_SECURE_API -DNO_STRICT
-LDFLAGS += -static -static-libstdc++ -static-libgcc -shared -Wl,--kill-at
-LDLIBS += -lodbc32 -lodbccp32 -luuid
+SOURCES += Main.cpp
 
-%.o: %.c
-	@printf '\t%s %s\n' CC $<
-	$(CC) -c $(CFLAGS) -o $@ $<
+PROJECT_BASENAME = csvParser
 
-%.o: %.cpp
-	@printf '\t%s %s\n' CXX $<
-	$(CXX) -c $(CFLAGS) -o $@ $<
+RC_DESC ?= CSV Parser for TVP(KIRIKIRI) (2/Z)
+RC_PRODUCTNAME ?= CSV Parser for TVP(KIRIKIRI) (2/Z)
+RC_LEGALCOPYRIGHT ?= Copyright (C) 2005-2008 Go Watanabe; Copyright (C) 2008-2009 W.Dee; Copyright (C) 2011-2016 miahmie; Copyright (C) 2019-2020 Julian Uy; See details of license at license.txt, or the source code location.
 
-SOURCES := ../tp_stub.cpp Main.cpp
-OBJECTS := $(SOURCES:.c=.o)
-OBJECTS := $(OBJECTS:.cpp=.o)
-
-BINARY ?= csvParser.dll
-ARCHIVE ?= csvParser.$(GIT_TAG).7z
-
-all: $(BINARY)
-
-archive: $(ARCHIVE)
-
-clean:
-	rm -f $(OBJECTS) $(BINARY) $(ARCHIVE)
-
-$(ARCHIVE): $(BINARY) 
-	rm -f $(ARCHIVE)
-	7z a $@ $^
-
-$(BINARY): $(OBJECTS) 
-	@printf '\t%s %s\n' LNK $@
-	$(CXX) $(CFLAGS) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+include external/tp_stubz/Rules.lib.make
