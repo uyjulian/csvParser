@@ -1,12 +1,23 @@
+#ifndef NO_V2LINK
 #include <windows.h>
+#endif
+
 #include "tp_stub.h"
 #include <stdio.h>
 #include <string>
 
+#if 0
+typedef unsigned long ULONG;
+#endif
+
 // initStorage/parseStorageの読み込みデフォルトを吉里吉里組み込みのTextStreamにする場合は1
 // 
 #ifndef CSVPARSER_DEFAULT_TEXTSTREAM
+#if 1
 #define CSVPARSER_DEFAULT_TEXTSTREAM 0
+#else
+#define CSVPARSER_DEFAULT_TEXTSTREAM 1
+#endif
 #endif
 
 
@@ -23,19 +34,6 @@
 
 using namespace std;
 
-/**
- * ログ出力用
- */
-static void log(const tjs_char *format, ...)
-{
-	va_list args;
-	va_start(args, format);
-	tjs_char msg[1024];
-	_vsnwprintf(msg, 1024, format, args);
-	TVPAddLog(msg);
-	va_end(args);
-}
-
 //---------------------------------------------------------------------------
 
 // Array クラスメンバ
@@ -51,16 +49,34 @@ public:
 
 class IFileStorage : public IFile {
 
+#if 1
 	IStream *in;
+#else
+	iTJSBinaryStream *in;
+#endif
 	char buf[8192];
 	ULONG pos;
 	ULONG len;
 	bool eofFlag;
+#if 1
 	int codepage;
+#else
+	bool utf8;
+#endif
 	
 public:
-	IFileStorage(tTJSVariantString *filename, int codepage) : codepage(codepage) {
+#if 1
+	IFileStorage(tTJSVariantString *filename, int codepage) : codepage(codepage)
+#else
+	IFileStorage(tTJSVariantString *filename, bool utf8) : utf8(utf8)
+#endif
+	{
+
+#if 1
 		in = TVPCreateIStream(filename, TJS_BS_READ);
+#else
+		in = TVPCreateBinaryStreamInterfaceForRead(filename, "");
+#endif
 		if(!in) {
 			TVPThrowExceptionMessage((ttstr(TJS_W("cannot open : ")) + *filename).c_str());
 		}
@@ -71,7 +87,11 @@ public:
 
 	~IFileStorage() {
 		if (in) {
+#if 1
 			in->Release();
+#else
+			in->Destruct();
+#endif
 			in = NULL;
 		}
 	}
@@ -86,7 +106,12 @@ public:
 				return EOF;
 			} else {
 				pos = 0;
-				if (in->Read(buf, sizeof buf, &len) == S_OK) {
+#if 1
+				if (in->Read(buf, sizeof buf, &len) == S_OK)
+#else
+				if ((len = in->Read(buf, sizeof buf)) > 0)
+#endif
+				{
 					eofFlag = len < sizeof buf;
 				} else {
 					eofFlag = true;
@@ -132,14 +157,26 @@ public:
 		}
 		int l = (int)mbline.length();
 		if (l > 0 || c != EOF) {
+#if 1
 			wchar_t *buf = new wchar_t[l + 1];
 			l = MultiByteToWideChar(codepage, 0,
 									mbline.data(),
 									(int)mbline.length(),
 									buf, l);
-			buf[l] = '\0';
-			str += buf;
+				buf[l] = '\0';
+				str += buf;
 			delete buf;
+#else
+			if (utf8) {
+				tjs_char *buf = new tjs_char[l + 1];
+				l = TVPUtf8ToWideCharString(mbline.data(), buf);
+				buf[l] = '\0';
+				str += buf;
+				delete [] buf;
+			} else {
+				str += tTJSString(mbline.c_str());
+			}
+#endif
 			return true;
 		} else {
 			return false;
@@ -399,7 +436,7 @@ protected:
 		do {
 			if (i < line.length() && line[i] == '"') {
 				++i;
-				fld = L"";
+				fld = TJS_W("");
 				j = i;
 				do {
 					for (;j < line.length(); j++){
@@ -444,7 +481,7 @@ public:
 		file = NULL;
 		lineNo = 0;
 		separator = ',';
-		newline = L"\r\n";
+		newline = TJS_W("\r\n");
 	}
 
 	~NI_CSVParser() {
@@ -467,7 +504,7 @@ public:
 				}
 			}
 		}
-		return S_OK;
+		return TJS_S_OK;
 	}
 
 	/**
@@ -509,7 +546,11 @@ public:
 			//file = new IFileText(filename, ttstr());
 			file = new IFileStr(filename, ttstr(modestr));
 		} else {
+#if 1
 			file = new IFileStorage(filename, utf8 ? CP_UTF8 : CP_ACP);
+#else
+			file = new IFileStorage(filename, utf8);
+#endif
 		}
 		lineNo = 0;
 	}
@@ -519,7 +560,7 @@ public:
 	bool getNextLine(tTJSVariant *result = NULL) {
 		bool ret = false;
 		if (file) {
-			line = L"";
+			line = TJS_W("");
 			if (addline()) {
 				lineNo++;
 				iTJSDispatch2 *fields = TJSCreateArrayObject();
@@ -549,8 +590,8 @@ public:
 	 */
 	void parse(iTJSDispatch2 *objthis) {
 		iTJSDispatch2 *target = this->target ? this->target : objthis;
-		if (file && isValidMember(target, L"doLine")) {
-			iTJSDispatch2 *method = getMember(target, L"doLine");
+		if (file && isValidMember(target, TJS_W("doLine"))) {
+			iTJSDispatch2 *method = getMember(target, TJS_W("doLine"));
 			tTJSVariant result;
 			while (getNextLine(&result)) {
 				tTJSVariant var2 = tTJSVariant(lineNo);
@@ -673,21 +714,7 @@ static iTJSDispatch2 * Create_NC_CSVParser()
 
 #undef TJS_NATIVE_CLASSID_NAME
 
-#ifndef CSVPARSER_NO_V2LINK
-//---------------------------------------------------------------------------
-
-int WINAPI DllEntryPoint(HINSTANCE hinst, unsigned long reason,
-	void* lpReserved)
-{
-	return 1;
-}
-
-//---------------------------------------------------------------------------
-static tjs_int GlobalRefCountAtInit = 0;
-extern "C" __declspec(dllexport) HRESULT __stdcall V2Link(iTVPFunctionExporter *exporter)
-{
-	// スタブの初期化(必ず記述する)
-	TVPInitImportStub(exporter);
+void csvparser_init() {
 
 	// TJS のグローバルオブジェクトを取得する
 	iTJSDispatch2 * global = TVPGetScriptDispatch();
@@ -703,9 +730,29 @@ extern "C" __declspec(dllexport) HRESULT __stdcall V2Link(iTVPFunctionExporter *
 			ArrayClearMethod = getMember(dispatch, TJS_W("clear"));
 		}
 
-		addMember(global, L"CSVParser", Create_NC_CSVParser());
+		addMember(global, TJS_W("CSVParser"), Create_NC_CSVParser());
 		global->Release();
 	}
+}
+
+
+#ifndef NO_V2LINK
+//---------------------------------------------------------------------------
+
+int WINAPI DllEntryPoint(HINSTANCE hinst, unsigned long reason,
+	void* lpReserved)
+{
+	return 1;
+}
+
+//---------------------------------------------------------------------------
+static tjs_int GlobalRefCountAtInit = 0;
+extern "C" __declspec(dllexport) HRESULT __stdcall V2Link(iTVPFunctionExporter *exporter)
+{
+	// スタブの初期化(必ず記述する)
+	TVPInitImportStub(exporter);
+
+	csvparser_init();
 			
 	// この時点での TVPPluginGlobalRefCount の値を
 	GlobalRefCountAtInit = TVPPluginGlobalRefCount;
@@ -734,7 +781,7 @@ extern "C" __declspec(dllexport) HRESULT __stdcall V2Unlink()
 
 	// - global の DeleteMember メソッドを用い、オブジェクトを削除する
 	if (global)	{
-		delMember(global, L"CSVParser");
+		delMember(global, TJS_W("CSVParser"));
 		if (ArrayClearMethod) {
 			ArrayClearMethod->Release();
 			ArrayClearMethod = NULL;
@@ -748,4 +795,4 @@ extern "C" __declspec(dllexport) HRESULT __stdcall V2Unlink()
 	return S_OK;
 }
 
-#endif // CSVPARSER_NO_V2LINK
+#endif // NO_V2LINK
